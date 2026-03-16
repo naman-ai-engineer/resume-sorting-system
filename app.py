@@ -50,15 +50,15 @@ st.sidebar.success("Access Granted: A1HR Consulting")
 @st.cache_resource
 
 def init_models():
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     
-    # We use 'embedding-001' and 'gemini-1.5-flash' - these are the stable industry standards
+  
     embeddings = GoogleGenerativeAIEmbeddings(
-        model='models/embedding-001', 
+        model='gemini-embedding-2-preview', 
         google_api_key=api_key
     )
     llm = ChatGoogleGenerativeAI(
-        model='gemini-1.5-flash', 
+        model='gemini-2.5-flash-lite', 
         google_api_key=api_key
     )
     return embeddings, llm

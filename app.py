@@ -44,7 +44,7 @@ if not st.session_state.authenticated:
     st.info("🔒 Please enter your access key in the sidebar to unlock the AI Sorter.")
     st.stop() # CRITICAL: This completely stops the app from rendering the UI below!
 
-st.sidebar.success("Access Granted: A1HR Consulting")
+st.sidebar.success("Access Granted")
 
 # 4. INITIALIZE MODELS
 @st.cache_resource
@@ -85,7 +85,7 @@ def extract_text(feed):
 
 # 6. UI LAYOUT
 st.title("Get top candidates in 2 minutes without manual screening")
-st.markdown("### Powered by Rocket Profit AI")
+st.markdown("### Powered by Rocket Profit Systems")
 
 col1, col2 = st.columns([1, 1])
 
@@ -165,8 +165,7 @@ if st.button("Start Sorting"):
                     "Similarity" : round(candidate["score"] * 100, 1),
                     "AI Analysis" : analysis.content
                 })
-            
-            # UI Updates
+             
             st.success(f"✅ Successfully filtered down to the top {len(results)} candidate(s)!")
 
             for res in results:

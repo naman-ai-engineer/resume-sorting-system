@@ -44,15 +44,12 @@ if not st.session_state.authenticated:
     st.info("🔒 Please enter your access key in the sidebar to unlock the AI Sorter.")
     st.stop() # CRITICAL: This completely stops the app from rendering the UI below!
 
-
 st.sidebar.success("Access Granted: A1HR Consulting")
 
+# 4. INITIALIZE MODELS
 @st.cache_resource
-
 def init_models():
     api_key = os.environ.get("GEMINI_API_KEY")
-    
-  
     embeddings = GoogleGenerativeAIEmbeddings(
         model='gemini-embedding-2-preview', 
         google_api_key=api_key
@@ -64,6 +61,7 @@ def init_models():
     return embeddings, llm
 
 embeddings, llm = init_models()
+
 # 5. HELPER FUNCTION
 def extract_text(feed):
     text = ""
@@ -86,8 +84,8 @@ def extract_text(feed):
     return text
 
 # 6. UI LAYOUT
-st.title("🚀 Rocket Profit: Stop sorting resumes manually.")
-st.markdown("### Revamping Operational Efficiency for HR Consulting")
+st.title("Get top candidates in 2 minutes without manual screening")
+st.markdown("### Powered by Rocket Profit AI")
 
 col1, col2 = st.columns([1, 1])
 
@@ -105,46 +103,74 @@ if st.button("Start Sorting"):
         st.warning("Please Provide both a Job Description and at least 1 Resume")
     else:
         with st.spinner("Analyzing and Ranking Candidates..."):
+            
+            # Extract text
             all_extracted = [{"name": file.name, "text": extract_text(file)} for file in uploaded_files]
             resume_data = [r for r in all_extracted if r.get("text") and str(r["text"]).strip()]
             
             if len(resume_data) < len(all_extracted):
-                st.warning(f"⚠️ {len(all_extracted) - len(resume_data)} file(s) were skipped because no readable text was found.")
+                st.warning(f"⚠️ {len(all_extracted) - len(resume_data)} file(s) skipped (no readable text).")
 
             if not resume_data:
                 st.error("No readable text found in any uploaded resumes. Process stopped.")
                 st.stop()
 
+            # Create Embeddings and calculate similarity
             jd_vector = embeddings.embed_query(jd_text)
             resume_texts = [r["text"] for r in resume_data]
             resume_vectors = embeddings.embed_documents(resume_texts)
-
             scores = cosine_similarity([jd_vector], resume_vectors)[0]
 
-            results = []
+            # Pair names/texts with their scores and sort descending
+            scored_resumes = []
             for i, score in enumerate(scores):
-                if score > 0.3:
-                    prompt = f"""You are an expert HR consultant. Critically evaluate this resume against the JD. 
-                    Resume: {resume_texts[i]} 
-                    JD: {jd_text}
-                    
-                    Provide a highly structured response:
-                    - 3 Pros: (Bullet points)
-                    - 1 Critical Con/Missing Skill:
-                    - Overall Verdict: (1-2 line summary)
-                    """
-                    analysis = llm.invoke(prompt)
-                    results.append({
-                        "Name" : resume_data[i]["name"],
-                        "Similarity" : round(score * 100, 1),
-                        "AI Analysis" : analysis.content
-                    })
+                scored_resumes.append({
+                    "name": resume_data[i]["name"],
+                    "text": resume_texts[i],
+                    "score": score
+                })
+            scored_resumes = sorted(scored_resumes, key=lambda x: x["score"], reverse=True)
+
+            # --- THE NEW HYBRID LOGIC ---
+            MIN_SCORE = 0.50
+            TOP_PERCENT = 0.50
             
-            results = sorted(results, key=lambda x: x["Similarity"], reverse=True)
-            st.success(f"✅ Successfully analyzed {len(uploaded_files)} resumes!")
+            # Calculate how many resumes make up 50% (minimum 1)
+            max_candidates = max(1, int(len(scored_resumes) * TOP_PERCENT))
+            
+            # Filter the top 50% by the 0.50 threshold
+            final_candidates = [c for c in scored_resumes[:max_candidates] if c["score"] >= MIN_SCORE]
+
+            # Fallback: If no one hits 0.50, show the closest match to avoid a blank screen
+            if not final_candidates and scored_resumes:
+                final_candidates = [scored_resumes[0]]
+                st.info("⚠️ No candidates met the strict 50% keyword match threshold. Showing the closest available profile.")
+            # -----------------------------
+
+            # Send ONLY the filtered candidates to the LLM
+            results = []
+            for candidate in final_candidates:
+                prompt = f"""You are an expert HR. Critically evaluate this resume against the JD. 
+                Resume: {candidate['text']} 
+                JD: {jd_text}
+                
+                Provide a highly structured response:
+                - 3 Pros: (Bullet points)
+                - 1 Critical Con/Missing Skill:
+                - Overall Verdict: (1-2 line summary)
+                """
+                analysis = llm.invoke(prompt)
+                results.append({
+                    "Name" : candidate["name"],
+                    "Similarity" : round(candidate["score"] * 100, 1),
+                    "AI Analysis" : analysis.content
+                })
+            
+            # UI Updates
+            st.success(f"✅ Successfully filtered down to the top {len(results)} candidate(s)!")
 
             for res in results:
-                with st.expander(f"{res['Name']} - Semantic Match: {res['Similarity']}%"):
+                with st.expander(f"{res['Name']} - Fit Score: {res['Similarity']}%"):
                     st.markdown(res["AI Analysis"])
                     
             if results:
